@@ -1256,5 +1256,149 @@ Após isso, volta-se no `Jupyter Notebook` e executa o seguinte Script Python:
 
     con.close() #ENCERRANDO A CONEXÃO COM BANCO DE DADOS
 
+### 12. CÁLCULO DA CONECTIVIDADE E ACESSIBILIDADE (REDE COM ANEL VIÁRIO)
 
+Todos os processos feitos para a malha viária com o anel proposto por Silva (2012) foram similares ao anterior. Segue os códigos a seguir:
 
+#### 12.1. PRÉ-PROCESSAMENTO
+#### 12.1.1. CRIAÇÃO DA REDE A SER ANALISADA `(SQL)`
+
+#### 12.1. PRÉ-PROCESSAMENTO
+#### 12.1.1. CRIAÇÃO DA REDE A SER ANALISADA `(SQL)`
+
+    -- CRIANDO UMA NOVA TABELA SIMILAR AO 'vias_grafos' CHAMADA 'rede_vicosa':
+    SELECT * INTO rede_vicosa_anel FROM vias_grafos_anel ORDER BY id;
+
+#### 12.1.2. CRIAÇÃO DE NOVAS COLUNAS PARA A TABELA `(SQL)`
+
+    -- CRIANDO OS CAMPOS PARA OS VÉRTICES DE FIM E INICIO DO GRAFO:
+    ALTER TABLE rede_vicosa_anel
+    ADD source INT4,
+    ADD target INT4,
+    ADD cost REAL,
+    ADD reverse_cost REAL;
+
+#### 12.1.3. RENOMEANDO O CAMPO 'geom' PARA 'the_geom' `(SQL)`
+
+    -- RENOMEANDO O CAMPO 'geom' PARA 'the_geom':
+    ALTER TABLE rede_vicosa_anel
+    RENAME COLUMN geom TO the_geom;
+
+#### 12.1.4. REDEFININDO OS DADOS DE DIREÇÃO DA VIA PARA 'YES' OU 'NO' `(SQL)`
+
+    -- VIAS COM MÃO ÚNICA:
+    UPDATE rede_vicosa_anel SET oneway = 'YES' WHERE oneway = 'TF';
+
+    -- VIAS COM MÃO DUPLA:
+    UPDATE rede_vicosa_anel SET oneway = 'NO' WHERE oneway = 'B';
+
+#### 12.1.5. DEFININDO OS CUSTOS DOS ARCOS `(SQL)`
+
+    -- DEFININDO CUSTOS 1 PARA TODOS OS VÉRTICES:
+    UPDATE rede_vicosa_anel SET cost = 1, reverse_cost = 1;
+
+    -- DEFININDO O CUSTO REVERSOS = -1 PARA OS GRAFOS COM DIREÇÃO ÚNICA:
+    UPDATE rede_vicosa_anel SET reverse_cost = '-1' WHERE oneway = 'YES';
+
+#### 12.1.6. CRIANDO A TOPOLOGIA DA REDE `(SQL)`
+
+    -- CRIANDO A TOPOLOGIA DA REDE:
+    SELECT pgr_createTopology('rede_vicosa_anel', 1);
+    
+#### 12.1.7. CRIANDO VÉRTICES NO MEIO DAS LINHAS `(SQL)`
+
+    -- CRIANDO OS VÉRTICES NO MEIO DE CADA GRAFO:
+    CREATE TABLE mid_points_anel AS
+    SELECT id, ST_LineInterpolatePoint(ST_LineMerge(the_geom), 0.5) as geom
+    FROM rede_vicosa_anel;
+
+    ALTER TABLE mid_points_anel
+    ADD CONSTRAINT mid_points_anel_pk PRIMARY KEY (id);
+
+    CREATE INDEX sidx_mid_points_anel
+     ON mid_points_anel
+     USING GIST (geom);
+     
+#### 12.1.8. VERIFICAR SE AS COLUNAS SOURCE E TARGET ESTÃO CORRETAS `(SQL)`
+
+    -- id do grafo: 98 (id grafo sem anel: 1)
+    UPDATE rede_vicosa_anel
+    SET source = '20', target = '72'
+    WHERE id = 98;
+
+    -- id do grafo: 74 (id grafo sem anel: 62)
+    UPDATE rede_vicosa_anel
+    SET source = '43', target = '42'
+    WHERE id = 74;
+
+    -- id do grafo: 49 (id grafo sem anel: 71)
+    UPDATE rede_vicosa_anel
+    SET source = '34', target = '33'
+    WHERE id = 49;
+
+    -- id do grafo: 64 (id grafo sem anel: 96)
+    UPDATE rede_vicosa_anel
+    SET source = '82', target ='79'
+    WHERE id = 64;
+    
+#### 12.1.9. CRIANDO A REDE COM PONTOS INTERMEDIÁRIOS ATRAVÉS DO QGIS
+
+Etapa realizada de forma semelhante a malha sem anel viário.
+
+#### 12.1.10. REMOVENTO ELEMENTOS INUTEIS DA rede_vicosa_anel_mp_prov `(SQL)`
+
+    -- REMOVENDO DA CAMADA rede_vicosa_anel_mp AQUELAS GEOMETRIAS NÃO UTEIS PARA A ATUAL ANÁLISE
+
+    CREATE TABLE rede_vicosa_anel_mp AS
+    SELECT rvmpp.id, rvmpp.comp_via, rvmpp.nome_rua, rvmpp.comp_nome_rua, rvmpp.tipo_pm, rvmpp.comp_tipo_pm, rvmpp.oneway,  rvmpp.id_grafo_sem_anel, rvmpp.source, rvmpp.target, rvmpp.cost, rvmpp.reverse_co, ST_Difference(rvmpp.geom, ptos.geom) as geom 
+    FROM (SELECT rvmpp.*
+    FROM rede_vicosa_anel_mp_prov rvmpp, mid_points_anel mp
+    WHERE ST_Contains(mp.geom, rvmpp.geom)) as ptos, rede_vicosa_anel_mp_prov rvmpp
+    WHERE ST_Intersects(rvmpp.geom, ptos.geom);
+
+    DELETE FROM rede_vicosa_anel_mp
+    WHERE ST_LENGTH(geom) = 0;
+
+    ALTER TABLE rede_vicosa_anel_mp
+    ADD COLUMN id0 SERIAL PRIMARY KEY;
+
+    --DELETANDO A TABELA rede_vicosa_anel_mp_prov, JÁ QUE A DEFINITIVA FOI CRIADA
+    DROP TABLE rede_vicosa_anel_mp_prov;
+
+    -- ALTERANDO A TABELA REDE_VICOSA_anel_MP:
+    ALTER TABLE rede_vicosa_anel_mp
+    RENAME COLUMN id TO id_grafo;
+    
+#### 12.1.11. RENOMEANDO O id DA TABELA mid_points_anel `(SQL)`
+
+    --ALTERANDO A TABELA 'mid_points_anel' PARA INCLUIR UMA COLUNA CHAMADA ID_GRAFO E ALTERAR O ID PARA 1000 + id DO GRAFO.
+    ALTER TABLE mid_points_anel
+    ADD id_grafo INT4;
+
+    UPDATE mid_points_anel
+    SET id_grafo = id;
+
+    UPDATE mid_points_anel
+    SET id = 1000 + id;
+    
+#### 12.1.12. CRIANDO A TABELA rede_vicosa_anel_mp_vertices COM TODOS OS VÉRTICES DA rede_vicosa_anel_mp (VÉRTICES DE INÍCIO E FIM DA rede_vicosa_anel E VÉRTICES DA TABELA mid_points_anel `(SQL)`
+
+    --CRIANDO A TABELA rede_vicosa_anel_mp_vertices QUE POSSUIRÁ TODOS OS VERTICES DA REDE PARA CALCULO DE ACESSIBILIDADE:
+    SELECT *
+    INTO rede_vicosa_anel_mp_vertices
+    FROM mid_points_anel;
+
+    ALTER TABLE rede_vicosa_anel_mp_vertices
+    ADD CONSTRAINT rede_vicosa_anel_mp_vertices_pk PRIMARY KEY (id);
+
+    INSERT INTO rede_vicosa_anel_mp_vertices (id, geom)
+    (SELECT id, the_geom as geom FROM rede_vicosa_anel_vertices_pgr);
+
+    SELECT * FROM rede_vicosa_anel_mp_vertices;
+    
+   
+#### 13.1.13. COMPLETANDO A TABELA rede_vicosa_anel_mp COM OS VÉRTICES INICIAIS E FINAIS DE CADA LINHA `(PYTHON)`
+
+Os processo a seguir são feitos em ligaguem python
+
+#### 13.1.13.1. IMPORTANDO O PACOTE psycopg2 QUE CONECTA O PYTHON COM O POSTGRE-SQL E O PACOTE pandas PARA ORGANIZAR AS TABELAS DE ACESSIBILIDADE `(PYTHON)`
