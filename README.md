@@ -870,14 +870,14 @@ Foi necessário verificar no `QGIS` se as colunas source e target estão preench
  
  Para criar a rede com pontos intermediários é necessário usar o software `QGIS` através da ferramenta `Connect nodes to lines` presente no complemento `Networks`. Criou-se uma cópia da camada `rede_vicosa` renomeando-a para `rede_vicosa_mp_prov` e a ferramenta foi utilizada nessa nova camada e o resultado foi importado para dentro do banco de dados utilizando o Gerenciador BD do `QGIS`. Durante a importação o id dessa rede foi nomeado como id0.
  
-  #### 12.1.10. REMOVENTO ELEMENTOS INUTEIS DA `rede_vicosa_mp_prov` `(SQL)`
+  #### 11.1.10. REMOVENTO ELEMENTOS INUTEIS DA `rede_vicosa_mp_prov` `(SQL)`
  
 A criação dessa nova rede não resultou em um arquivo pronto para ser trabalhado e novos processamento foram realizados para "limpar" a tabela. A tabela limpa foi nomeada como `rede_vicosa_mp` e os comandos foram os seguintes:
- 
+
     -- REMOVENDO DA CAMADA rede_vicosa_mp AQUELAS GEOMETRIAS NÃO UTEIS PARA A ATUAL ANÁLISE
 
     CREATE TABLE rede_vicosa_mp AS
-    SELECT rvmpp.id, rvmpp.comp_via, rvmpp.nome_rua, rvmpp.tipo_pm, rvmpp.largura_me, rvmpp.pavimento, rvmpp.oneway, rvmpp.decliv_me, rvmpp.source, rvmpp.target, rvmpp.cost, rvmpp.reverse_co, ST_Difference(rvmpp.geom, ptos.geom) as geom 
+    SELECT rvmpp.id, rvmpp.comp_via, rvmpp.nome_rua, rvmpp.comp_nome_rua, rvmpp.tipo_pm, rvmpp.comp_tipo_pm, rvmpp.oneway, rvmpp.source, rvmpp.target, rvmpp.cost, rvmpp.reverse_cost, ST_Difference(rvmpp.geom, ptos.geom) as geom 
     FROM (SELECT rvmpp.*
     FROM rede_vicosa_mp_prov rvmpp, mid_points mp
     WHERE ST_Contains(mp.geom, rvmpp.geom)) as ptos, rede_vicosa_mp_prov rvmpp
@@ -889,4 +889,48 @@ A criação dessa nova rede não resultou em um arquivo pronto para ser trabalha
     ALTER TABLE rede_vicosa_mp
     ADD COLUMN id0 SERIAL PRIMARY KEY;
     
-  
+    --DELETANDO A TABELA rede_vicosa_mp_prov, JÁ QUE A DEFINITIVA FOI CRIADA
+    DROP TABLE rede_vicosa_mp_prov;
+
+    -- ALTERANDO A TABELA REDE_VICOSA_MP:
+    ALTER TABLE rede_vicosa_mp
+    RENAME COLUMN id TO id_grafo;
+    
+#### 11.1.11. RENOMEANDO O id DA TABELA `mid_points` `(SQL)`
+
+A tabela mid_points apresenta o id de cada ponto igual ao id de sua respectiva linha da tabela `rede_vicosa`. Para diferenciar os pontos intermediários dos pontos finais e iniciais de cada linha original da `rede_vicosa`, escolheu-se somar 1000 ao valor do id do ponto intermediário. Dessa forma fica fácil de saber que o ponto de id 1050 da tabela `rede_vicosa_mp` corresponde ao ponto intermediário da linha 50, enquanto o ponto com id 50 é algum vértice inicial e/ou final de alguma linha. O comando utilizado foi:
+    
+    --ALTERANDO A TABELA 'mid_points' PARA INCLUIR UMA COLUNA CHAMADA ID_GRAFO E ALTERAR O ID PARA 1000 + id DO GRAFO.
+    ALTER TABLE mid_points
+    ADD id_grafo INT4;
+
+    UPDATE mid_points
+    SET id_grafo = id;
+
+    UPDATE mid_points
+    SET id = 1000 + id;
+    
+    SELECT * FROM mid_points;
+    
+#### 11.1.12. CRIANDO A TABELA `rede_vicosa_mp_vertices` COM TODOS OS VÉRTICES DA `rede_vicosa_mp` (VÉRTICES DE INÍCIO E FIM DA `rede_vicosa` E VÉRTICES DA TABELA `mid_points` `(SQL)`
+
+    --CRIANDO A TABELA rede_vicosa_mp_vertices QUE POSSUIRÁ TODOS OS VERTICES DA REDE PARA CALCULO DE ACESSIBILIDADE:
+    SELECT *
+    INTO rede_vicosa_mp_vertices
+    FROM mid_points;
+
+    ALTER TABLE rede_vicosa_mp_vertices
+    ADD CONSTRAINT rede_vicosa_mp_vertices_pk PRIMARY KEY (id);
+
+    INSERT INTO rede_vicosa_mp_vertices (id, geom)
+    (SELECT id, the_geom as geom FROM rede_vicosa_vertices_pgr);
+
+    SELECT * FROM rede_vicosa_mp_vertices;
+    
+ #### 11.1.13. COMPLETANDO A TABELA `rede_vicosa_mp` COM OS VÉRTICES INICIAIS E FINAIS DE CADA LINHA `(PYTHON)`
+ 
+Para completar as colunas source e target da tabela `rede_vicosa_mp` utilizou-se um código em linguagem Python. O código realiza uma estrutura de repetição que percorre da linha 1 até a linha de id máximo da tabela e analisa qual elemento da tabela `rede_vicosa_mp_vertices` está contido no inicio e fim da linha em análise. Em seguida atualiza as colunas source e target com os valores encontrados. Segue o código:
+
+#### 11.1.13.1. IMPORTANDO O PACOTE psycopg2 QUE CONECTA O PYTHON COM O POSTGRE-SQL E O PACOTE pandas PARA ORGANIZAR AS TABELAS DE ACESSIBILIDADE `(PYTHON)`
+
+    import psycopg2 as pg
