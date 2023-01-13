@@ -380,8 +380,6 @@ Após a conclusão dos processos acima, a tabela `via_grafos` foi preenchida e a
     cur.close() #ENCERRANDO A INSTÂNCIA CRIADA PARA A EXECUÇÃO DO COMANDO
     con.close() #ENCERRANDO A CONEXÃO COM O BANCO DE DADOS
 
-**OBS.: Esses códigos estão disponíveis em SCRIPTS_DISSERTACAO > SCRIPTS_PYTHON > av_dissertacao > projetos > 1_ORGANIZAR_DADOS > VIÇOSA > ORGANIZAR_DADOS_DAS_VIAS_SEM_O_ANEL.ipyb**
-
 **O arquivo `vias_grafos` preenchido se encontra na pasta `DADOS_FINAIS`.**
 
 ### 9. PREPARAÇÃO DA REDE COM ANÉL VIÁRIO
@@ -769,6 +767,126 @@ Após a conclusão dos processos acima, a tabela `via_grafos` foi preenchida e a
     cur.close() #ENCERRANDO A INSTÂNCIA CRIADA PARA A EXECUÇÃO DO COMANDO
     con.close() #ENCERRANDO A CONEXÃO COM O BANCO DE DADOS
 
-**OBS.: Esses códigos estão disponíveis em SCRIPTS_DISSERTACAO > SCRIPTS_PYTHON > av_dissertacao > projetos > 1_ORGANIZAR_DADOS > VIÇOSA > ORGANIZAR_DADOS_DAS_VIAS_SEM_O_ANEL.ipyb**
-
 **O arquivo `vias_grafos` preenchido se encontra na pasta `DADOS_FINAIS`.**
+
+### 11. CÁLCULO DA CONECTIVIDADE E ACESSIBILIDADE (REDE SEM ANEL VIÁRIO)
+
+Essa parte foi dividida em duas etapas: pré-processamento e cálculos. Foi utilizados comandos em linguaguem `SQL` e linguaguem `Python` nessas etapas. Nos título dos tópicos terá informações de os comandos foram executados no pgAdmin (comando SQL) ou no Jupyter Notebook (comando Python).
+
+#### 11.1. PRÉ-PROCESSAMENTO
+
+#### 11.1.1. CRIAÇÃO DA REDE A SER ANALISADA `(SQL)`
+
+Uma cópia da tabela `via_grafos` foi criada e nomeada como `rede_vicosa` com o seguinte comando:
+
+    -- CRIANDO UMA NOVA TABELA SIMILAR AO 'vias_grafos' CHAMADA 'rede_vicosa':
+    SELECT * INTO rede_vicosa FROM vias_grafos ORDER BY id;
+    
+#### 11.1.2. CRIAÇÃO DE NOVAS COLUNAS PARA A TABELA `(SQL)`
+
+Para resolver problemas de rede com a extensão `pgRouting` é necessário a criação das colunas de nó inicial, no final, custo e custo reverso. Utiliza-se o seguinte comando:
+
+    -- CRIANDO OS CAMPOS PARA OS VÉRTICES DE FIM E INICIO DO GRAFO:
+    ALTER TABLE rede_vicosa
+    ADD source INT4,
+    ADD target INT4,
+    ADD cost REAL,
+    ADD reverse_cost REAL;
+
+#### 11.1.3. RENOMEANDO O CAMPO 'geom' PARA 'the_geom' `(SQL)`
+
+    -- RENOMEANDO O CAMPO 'geom' PARA 'the_geom':
+    ALTER TABLE rede_vicosa
+    RENAME COLUMN geom TO the_geom;
+
+#### 11.1.4. REDEFININDO OS DADOS DE DIREÇÃO DA VIA PARA 'YES' OU 'NO' `(SQL)`
+
+    -- VIAS COM MÃO ÚNICA:
+    UPDATE rede_vicosa SET oneway = 'YES' WHERE oneway = 'TF';
+
+    -- VIAS COM MÃO DUPLA:
+    UPDATE rede_vicosa SET oneway = 'NO' WHERE oneway = 'B';
+    
+ #### 11.1.5. DEFININDO OS CUSTOS DOS ARCOS `(SQL)`
+
+    -- DEFININDO CUSTOS 1 PARA TODOS OS VÉRTICES:
+    UPDATE rede_vicosa SET cost = 1, reverse_cost = 1;
+
+    -- DEFININDO O CUSTO REVERSOS = -1 PARA OS GRAFOS COM DIREÇÃO ÚNICA:
+    UPDATE rede_vicosa SET reverse_cost = '-1' WHERE oneway = 'YES';
+
+#### 11.1.6. CRIANDO A TOPOLOGIA DA REDE `(SQL)`
+
+    SELECT pgr_createTopology('rede_vicosa', 1);
+    
+As colunas source e target serão preenchidas com id's de vérticies iniciais e finais. Uma nova tabela surgirá com a geometria dos vértices gerados. 
+
+#### 11.1.7. CRIANDO VÉRTICES NO MEIO DAS LINHAS `(SQL)`
+
+Para o cálculo da acessibilidade é necessário computar o custo entre arcos, porém, a extensão só permite o cálculo entre nós. Para contornar esse problema, criou-se nós no meio de cada linha. O custo para atravessar esses nós centrais (com o custo de cada metade de arco igual a 0,5) é igual o custo entre arcos.
+
+A tabela com pontos intermediários chama-se `mid_points` e para criá-la usou o seguinte comando:
+
+    -- CRIANDO OS VÉRTICES NO MEIO DE CADA GRAFO:
+    CREATE TABLE mid_points AS
+    SELECT id, ST_LineInterpolatePoint(ST_LineMerge(the_geom), 0.5) as geom
+    FROM rede_vicosa;
+
+    ALTER TABLE mid_points
+    ADD CONSTRAINT mid_points_pk PRIMARY KEY (id);
+
+    CREATE INDEX sidx_mid_points
+     ON mid_points
+     USING GIST (geom);
+
+#### 11.1.8. VERIFICAR SE AS COLUNAS SOURCE E TARGET ESTÃO CORRETAS `(SQL)`
+
+Foi necessário verificar no `QGIS` se as colunas source e target estão preenchidas corretamente com os valores de id's dos vértices para as linhas com sentido de via unidirecional. Foi possível constatar que as linhas com id 1, 62, 71 e 96 estavam com o sentido invertido e isso foi consertado com os seguintes comandos:
+
+    -- CONFERIR SE OS VÉRTICES SOURCE E TARGET ESTÃO DE ACORDO COM A REALIDADE PARA OS GRAFOS QUE POSSUEM APENAS UMA MÃO.
+    -- DE FORMA MANUAL, DEVE-SE OBSERVAR AQUELES GRAFOS QUE NECESSIATARAM DE ALTERAR O CAMPO 'source' e 'target' DURANTE A EDIÇÃO DA CAMADA 'rede_vicosa'
+
+    -- id do grafo: 1
+    UPDATE rede_vicosa
+    SET source = '41', target = '5'
+    WHERE id = 1;
+
+    -- id do grafo: 62
+    UPDATE rede_vicosa
+    SET source = '82', target = '49'
+    WHERE id = 62;
+
+    -- id do grafo: 71
+    UPDATE rede_vicosa
+    SET source = '85', target = '83'
+    WHERE id = 71;
+
+    -- id do grafo: 96
+    UPDATE rede_vicosa
+    SET source = '72', target = '61'
+    WHERE id = 96;
+    
+  #### 11.1.9. CRIANDO A REDE COM PONTOS INTERMEDIÁRIOS ATRAVÉS DO QGIS
+ 
+ Para criar a rede com pontos intermediários é necessário usar o software `QGIS` através da ferramenta `Connect nodes to lines` presente no complemento `Networks`. Criou-se uma cópia da camada `rede_vicosa` renomeando-a para `rede_vicosa_mp_prov` e a ferramenta foi utilizada nessa nova camada e o resultado foi importado para dentro do banco de dados utilizando o Gerenciador BD do `QGIS`. Durante a importação o id dessa rede foi nomeado como id0.
+ 
+  #### 12.1.10. REMOVENTO ELEMENTOS INUTEIS DA `rede_vicosa_mp_prov` `(SQL)`
+ 
+A criação dessa nova rede não resultou em um arquivo pronto para ser trabalhado e novos processamento foram realizados para "limpar" a tabela. A tabela limpa foi nomeada como `rede_vicosa_mp` e os comandos foram os seguintes:
+ 
+    -- REMOVENDO DA CAMADA rede_vicosa_mp AQUELAS GEOMETRIAS NÃO UTEIS PARA A ATUAL ANÁLISE
+
+    CREATE TABLE rede_vicosa_mp AS
+    SELECT rvmpp.id, rvmpp.comp_via, rvmpp.nome_rua, rvmpp.tipo_pm, rvmpp.largura_me, rvmpp.pavimento, rvmpp.oneway, rvmpp.decliv_me, rvmpp.source, rvmpp.target, rvmpp.cost, rvmpp.reverse_co, ST_Difference(rvmpp.geom, ptos.geom) as geom 
+    FROM (SELECT rvmpp.*
+    FROM rede_vicosa_mp_prov rvmpp, mid_points mp
+    WHERE ST_Contains(mp.geom, rvmpp.geom)) as ptos, rede_vicosa_mp_prov rvmpp
+    WHERE ST_Intersects(rvmpp.geom, ptos.geom);
+
+    DELETE FROM rede_vicosa_mp
+    WHERE ST_LENGTH(geom) = 0;
+
+    ALTER TABLE rede_vicosa_mp
+    ADD COLUMN id0 SERIAL PRIMARY KEY;
+    
+  
