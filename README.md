@@ -4,6 +4,10 @@ Este é um tutorial com o passo-a-passo de todo o procedimento metodológico uti
 
 O objetivo desse tutorial é explicar de forma detalhada os procedimentos realizados para organizar a base de dados das vias de Viçosa e com isso, será possível entender o processo e replicá-lo para demais bases de dados.
 
+Os arquivos em SQL, Python e principais shapefiles utilizados estão disponíveis para download nesta página no GitHub.
+
+Os arquivos disponíveis 
+
 ## PASSO-A-PASSO:
 
 ### 1. ORIGEM DOS DADOS:
