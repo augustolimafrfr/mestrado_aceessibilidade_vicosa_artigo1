@@ -1707,6 +1707,6 @@ Após isso, volta-se no `Jupyter Notebook` e executa o seguinte Script Python:
 
     con.close() #ENCERRANDO A CONEXÃO COM BANCO DE DADOS
     
-**Os arquivos `vias_grafos`, `vias_grafos_anel`, `rede_vicosa`, `rede_vicosa_vertices_pgr`, `rede_vicosa_anel`, `rede_vicosa_anel_vertices_pgr`, `rede_vicosa_mp`, `rede_vicosa_mp_vertices`, `rede_vicosa_anel_mp`, `rede_vicosa_anel_mp_vertices`  se encontram na pasta `DADOS_FINAIS`.**
-    
 **APÓS ESSES PASSOS, AS TABELAS `rede_vicosa` e `rede_vicosa_anel` POSSUEM ATRIBUTOS DE ACESSIBILIDADE DAS VIAS.**
+    
+**Os arquivos `vias_grafos`, `vias_grafos_anel`, `rede_vicosa`, `rede_vicosa_vertices_pgr`, `rede_vicosa_anel`, `rede_vicosa_anel_vertices_pgr`, `rede_vicosa_mp`, `rede_vicosa_mp_vertices`, `rede_vicosa_anel_mp`, `rede_vicosa_anel_mp_vertices`  se encontram na pasta `DADOS_FINAIS`.**
