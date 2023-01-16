@@ -380,8 +380,6 @@ Após a conclusão dos processos acima, a tabela `via_grafos` foi preenchida e a
     cur.close() #ENCERRANDO A INSTÂNCIA CRIADA PARA A EXECUÇÃO DO COMANDO
     con.close() #ENCERRANDO A CONEXÃO COM O BANCO DE DADOS
 
-**O arquivo `vias_grafos` preenchido se encontra na pasta `DADOS_FINAIS`.**
-
 ### 9. PREPARAÇÃO DA REDE COM ANÉL VIÁRIO
 
 Para criar a rede com o anél viário proposto por Silva (2012) utilizou-se do mapa com seu traçado disponibilizado em sua tese. O mapa foi georreferenciado através da ferramenta `Georreferenciador` do software `QGIS` e serviu como pano de fundo para selecionar da base disponibilizada por Vieira e Castro (2021) aquelas vias que compunham o anel. A união do anel viário com a malha atual de Viçosa gerou uma malha viária fictícia com a simulação do Anel Viário. Os `passos 4 e 5 ` desse tutorial foram realizados para essa nova malha com o objetivo de garantir a integridade topológica da rede e transformá-la na forma de grafos. Com isso, gerou-se uma rede nomeada como `vias_grafos_anel` com os mesmo atributos da rede `via_grafos` mais um adicional: id_grafo_semanel, que possui o objetivo indicar qual o id correspondente da tabela `via_grafos` na tabela `via_grafos_anel`. Portanto, os atributos dessa nova rede são: **comp_via**, **nome_rua**, **comp_nome_rua**, **tipo_pm**, **comp_tipo_pm**, **sentido da via**, e **id_grafo_semanel**.
@@ -1708,5 +1706,7 @@ Após isso, volta-se no `Jupyter Notebook` e executa o seguinte Script Python:
     cur.close() #ENCERRANDO A INSTÂNCIA CRIADA PARA A EXECUÇÃO DO COMANDO
 
     con.close() #ENCERRANDO A CONEXÃO COM BANCO DE DADOS
+    
+**Os arquivos `vias_grafos`, vias_grafos_anel, rede_vicosa, rede_vicosa_vertices_pgr, rede_vicosa_anel, rede_vicosa_anel_vertices_pgr, rede_vicosa_mp, rede_vicosa_mp_vertices, rede_vicosa_anel_mp, rede_vicosa_anel_mp_vertices preenchidos se encontram na pasta `DADOS_FINAIS`.**
     
 **APÓS ESSES PASSOS, AS TABELAS `rede_vicosa` e `rede_vicosa_anel` POSSUEM ATRIBUTOS DE ACESSIBILIDADE DAS VIAS.**
