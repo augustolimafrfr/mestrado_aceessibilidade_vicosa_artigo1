@@ -1709,4 +1709,4 @@ Após isso, volta-se no `Jupyter Notebook` e executa o seguinte Script Python:
 
     con.close() #ENCERRANDO A CONEXÃO COM BANCO DE DADOS
     
-APÓS ESSES PASSOS, AS TABELAS rede_vicosa e rede_vicosa_anel POSSUEM ATRIBUTOS DE ACESSIBILIDADE DAS VIAS.
+**APÓS ESSES PASSOS, AS TABELAS `rede_vicosa` e `rede_vicosa_anel` POSSUEM ATRIBUTOS DE ACESSIBILIDADE DAS VIAS.**
