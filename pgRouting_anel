@@ -1,0 +1,214 @@
+-- OBSERVANDO A TABELA DOS GRAFOS:
+SELECT * FROM vias_grafos_anel;
+
+-- CRIANDO UMA NOVA TABELA SIMILAR AO 'vias_grafos' CHAMADA 'rede_vicosa':
+SELECT * INTO rede_vicosa_anel FROM vias_grafos_anel ORDER BY id;
+
+-- CRIANDO OS CAMPOS PARA OS VÉRTICES DE FIM E INICIO DO GRAFO:
+ALTER TABLE rede_vicosa_anel
+ADD source INT4,
+ADD target INT4,
+ADD cost REAL,
+ADD reverse_cost REAL;
+
+-- RENOMEANDO O CAMPO 'geom' PARA 'the_geom':
+ALTER TABLE rede_vicosa_anel
+RENAME COLUMN geom TO the_geom;
+
+-- REDEFININDO OS DADOS DE DIREÇÃO DA VIA PARA 'YES' OU 'NO':
+-- VIAS COM MÃO ÚNICA:
+UPDATE rede_vicosa_anel SET oneway = 'YES' WHERE oneway = 'TF';
+
+-- VIAS COM MÃO DUPLA:
+UPDATE rede_vicosa_anel SET oneway = 'NO' WHERE oneway = 'B';
+
+-- DEFININDO CUSTOS 1 PARA TODOS OS VÉRTICES:
+UPDATE rede_vicosa_anel SET cost = 1, reverse_cost = 1;
+
+-- DEFININDO O CUSTO REVERSOS = -1 PARA OS GRAFOS COM DIREÇÃO ÚNICA:
+UPDATE rede_vicosa_anel SET reverse_cost = '-1' WHERE oneway = 'YES';
+
+-- CRIANDO A TOPOLOGIA DA REDE:
+SELECT pgr_createTopology('rede_vicosa_anel', 1);
+
+-- CRIANDO OS VÉRTICES NO MEIO DE CADA GRAFO:
+CREATE TABLE mid_points_anel AS
+SELECT id, ST_LineInterpolatePoint(ST_LineMerge(the_geom), 0.5) as geom
+FROM rede_vicosa_anel;
+
+ALTER TABLE mid_points_anel
+ADD CONSTRAINT mid_points_anel_pk PRIMARY KEY (id);
+
+CREATE INDEX sidx_mid_points_anel
+ ON mid_points_anel
+ USING GIST (geom);
+ 
+-- CONFERIR SE OS VÉRTICES SOURCE E TARGET ESTÃO DE ACORDO COM A REALIDADE PARA OS GRAFOS QUE POSSUEM APENAS UMA MÃO.
+-- DE FORMA MANUAL, DEVE-SE OBSERVAR AQUELES GRAFOS QUE NECESSIATARAM DE ALTERAR O CAMPO 'source' e 'target' DURANTE A EDIÇÃO DA CAMADA 'rede_vicosa'
+
+-- id do grafo: 98 (id grafo sem anel: 1)
+UPDATE rede_vicosa_anel
+SET source = '8', target = '24'
+WHERE id = 98;
+
+-- id do grafo: 74 (id grafo sem anel: 62)
+UPDATE rede_vicosa_anel
+SET source = '89', target = '34'
+WHERE id = 74;
+
+-- id do grafo: 49 (id grafo sem anel: 71)
+UPDATE rede_vicosa_anel
+SET source = '87', target = '86'
+WHERE id = 49;
+
+-- id do grafo: 64 (id grafo sem anel: 96)
+UPDATE rede_vicosa_anel
+SET source = '73', target ='69'
+WHERE id = 64;
+
+-- OBS: NESSA PARTE DEVE-SE IR AO QGIS E USAR A FERRAMENTA 'Connect nodes to lines' PARA DIVIDIR A REDE_EXEMPLO NOS MID_POINTS.
+-- PRIMEIRO, FAÇA UMA CÓPIA DA CAMADA 'rede_vicosa_anel' NOMEANDO-A COMO 'rede_vicosa_anel_mp_prov', USE A FERRAMENTA MENCIONADA E DEPOIS SUBA A NOVA REDE PARA O BANCO DE DADOS.
+-- OBS: AO SUBIR A REDE DIVIDIDA PARA O BANCO DE DADOS, DEVE-SE COLOCAR OS NOVOS ID'S COM O NOME DE id0.
+
+-- REMOVENDO DA CAMADA rede_vicosa_mp AQUELAS GEOMETRIAS NÃO UTEIS PARA A ATUAL ANÁLISE
+
+CREATE TABLE rede_vicosa_anel_mp AS
+SELECT rvmpp.id, rvmpp.comp_via, rvmpp.nome_rua, rvmpp.tipo_pm, rvmpp.largura_me, rvmpp.pavimento, rvmpp.oneway, rvmpp.decliv_me, rvmpp.id_grafo_s, rvmpp.source, rvmpp.target, rvmpp.cost, rvmpp.reverse_co, ST_Difference(rvmpp.geom, ptos.geom) as geom 
+FROM (SELECT rvmpp.*
+FROM rede_vicosa_anel_mp_prov rvmpp, mid_points_anel mp
+WHERE ST_Contains(mp.geom, rvmpp.geom)) as ptos, rede_vicosa_anel_mp_prov rvmpp
+WHERE ST_Intersects(rvmpp.geom, ptos.geom);
+
+DELETE FROM rede_vicosa_anel_mp
+WHERE ST_LENGTH(geom) = 0;
+
+ALTER TABLE rede_vicosa_anel_mp
+ADD COLUMN id0 SERIAL PRIMARY KEY;
+
+--DELETANDO A TABELA rede_vicosa_anel_mp_prov, JÁ QUE A DEFINITIVA FOI CRIADA
+DROP TABLE rede_vicosa_anel_mp_prov;
+
+-- ALTERANDO A TABELA REDE_VICOSA_anel_MP:
+ALTER TABLE rede_vicosa_anel_mp
+RENAME COLUMN id TO id_grafo;
+
+--ALTERANDO A TABELA 'mid_points_anel' PARA INCLUIR UMA COLUNA CHAMADA ID_GRAFO E ALTERAR O ID PARA 1000 + id DO GRAFO.
+ALTER TABLE mid_points_anel
+ADD id_grafo INT4;
+
+UPDATE mid_points_anel
+SET id_grafo = id;
+
+UPDATE mid_points_anel
+SET id = 1000 + id;
+
+--CRIANDO A TABELA rede_vicosa_anel_mp_vertices QUE POSSUIRÁ TODOS OS VERTICES DA REDE PARA CALCULO DE ACESSIBILIDADE:
+SELECT *
+INTO rede_vicosa_anel_mp_vertices
+FROM mid_points_anel;
+
+ALTER TABLE rede_vicosa_anel_mp_vertices
+ADD CONSTRAINT rede_vicosa_anel_mp_vertices_pk PRIMARY KEY (id);
+
+INSERT INTO rede_vicosa_anel_mp_vertices (id, geom)
+(SELECT id, the_geom as geom FROM rede_vicosa_anel_vertices_pgr);
+
+SELECT * FROM rede_vicosa_anel_mp_vertices;
+
+-- AGORA É HORA DO PYTHON ENTRAR EM AÇÃO E ORGANIZAR OS VÉRTICES FINAIS E INICIAIS DE CADA GRAFO. OS DOIS EXEMPLOS A SEGUIR SÃO MERAMENTE ILUSTRATIVOS:
+-- SELECIONANDO  E O VÉRTICE INICIAL E FINAL DO GRAFO 1:
+SELECT rvmp.id, rvmp.geom
+FROM (SELECT ST_LineInterpolatePoints(ST_LineMerge(geom), 0) as geom
+FROM rede_vicosa_anel_mp
+WHERE id0 = 2) as pto, rede_vicosa_anel_mp_vertices rvmp
+WHERE ST_Intersects(pto.geom, rvmp.geom)
+
+SELECT rvmp.id, rvmp.geom
+FROM (SELECT ST_LineInterpolatePoints(ST_LineMerge(geom), 1) as geom
+FROM rede_vicosa_anel_mp
+WHERE id0 = 2) as pto, rede_vicosa_anel_mp_vertices rvmp
+WHERE ST_Intersects(pto.geom, rvmp.geom)
+
+-- APÓS O PYTHON, DEVE-SE VERIFICAR OS VÉRTICES INICIAIS E FINAIS DOS MESMOS GRAFOS MODIFICADOS QUANDO CRIOU-SE A 'rede_vicosa_anel'.
+-- A ALTERAÇÃO É FEITA DE FORMA SIMILAR:
+
+-- id do grafo: 224, 223 (id grafo sem anel: 1)
+UPDATE rede_vicosa_anel_mp
+SET source = '8', target ='1098'
+WHERE id0 = 224;
+
+UPDATE rede_vicosa_anel_mp
+SET source = '1098', target = '24'
+WHERE id0 = 223;
+
+-- id do grafo: 221, 222 (id grafo sem anel: 62)
+UPDATE rede_vicosa_anel_mp
+SET source = '1074', target ='34'
+WHERE id0 = 221;
+
+UPDATE rede_vicosa_anel_mp
+SET source = '89', target = '1074'
+WHERE id0 = 222;
+
+-- id do grafo: 207, 208 (id grafo sem anel: 71)
+UPDATE rede_vicosa_anel_mp
+SET source = '1049', target = '86'
+WHERE id0 = 207;
+
+UPDATE rede_vicosa_anel_mp
+SET source = '87', target = '1049'
+WHERE id0 = 208;
+
+-- id do grafo: 213, 214 (id grafo sem anel: 96)
+UPDATE rede_vicosa_anel_mp
+SET source = '1064', target = '69'
+WHERE id0 = 213;
+
+UPDATE rede_vicosa_anel_mp
+SET source = '73', target = '1064'
+WHERE id0 = 214;
+
+-- APÓS O PYTHON, RETORNA-SE AOS SEGUINTES COMANDOS:
+-- RENOEMANDO ALGUMAS COLUNAS DA REDE E RECRIANDO A TOPOLOGIA DA REDE:
+ALTER TABLE rede_vicosa_anel_mp
+RENAME COLUMN geom TO the_geom;
+
+ALTER TABLE rede_vicosa_anel_mp
+RENAME COLUMN id0 TO id;
+
+ALTER TABLE rede_vicosa_anel_mp
+RENAME COLUMN reverse_co to reverse_cost;
+
+ALTER TABLE rede_vicosa_anel_mp
+RENAME COLUMN id_grafo_s to id_grafo_semanel;
+
+SELECT pgr_createTopology('rede_vicosa_anel_mp', 1);
+
+-- OBSERVANDO A TABELA 'rede_vicosa_anel' e OS VÉRTICES DE INICIO E FIM DA REDE:
+
+SELECT * FROM rede_vicosa_anel;
+
+SELECT * FROM rede_vicosa_anel_vertices_pgr;
+
+SELECT * FROM rede_vicosa_anel_mp;
+
+SELECT * FROM rede_vicosa_anel_mp_vertices;
+
+-- CONSULTANDO O CUSTO ENTRE OS GRAFOS (GRAFO 1 PARA O 2 POR EXEMPLO):
+
+SELECT sum(djk.cost/2) as tot_cost
+FROM pgr_dijkstra('SELECT id, source, target, cost, reverse_cost from rede_vicosa_anel_mp', 1001, 1048, true) as djk
+JOIN rede_vicosa_anel_mp rvmp
+ON djk.edge = rvmp.id;
+
+CREATE OR REPLACE VIEW ROTAS AS
+SELECT seq, node, edge, the_geom FROM pgr_dijkstra('Select id, source, target, cost, reverse_cost from rede_vicosa_anel_mp', 1001, 1048, true) as djk
+JOIN rede_vicosa_anel_mp rvmp
+ON djk.edge = rvmp.id;
+
+-- ADICIONANDO CAMPOS NA TABELA 'rede_vicosa' OS CAMPOS PARA ADICONAR A ACESSIBILIDADE DAS VIAS:
+ALTER TABLE rede_vicosa_anel
+ADD COLUMN acess_1 REAL,
+ADD COLUMN acess_2 REAL,
+ADD COLUMN acess_3 REAL;
+
