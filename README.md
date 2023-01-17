@@ -6,8 +6,6 @@ O objetivo desse tutorial é explicar de forma detalhada os procedimentos realiz
 
 Os arquivos em SQL, Python e principais shapefiles utilizados estão disponíveis para download nesta página no GitHub.
 
-Os arquivos disponíveis 
-
 ## PASSO-A-PASSO:
 
 ### 1. ORIGEM DOS DADOS:
