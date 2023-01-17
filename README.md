@@ -18,12 +18,12 @@ Os dados utilizados nesse trabalho foram fornecidos por Vieira e Castro (2021). 
 
 ### 2. SELEÇÃO DOS ATRIBUTOS UTEIS:
 
-Diverssos atributos presentes em `Rede_Viaria_RSU_2021` não serão úteis para esse artigo. Portanto, da tabela de atributos dos dados originais, apenas o **sentido da via** permaneceu e todos os demais atributos foram excluidos através da ferramenta `Editar campos` do software `QGIS`. Quatro novos campos foram criados: **nome da rua** e **tipo_pm**, sendo que o primeiro será utilizado para incluir o nome das vias e o segundo a classificação de acordo com o plano de mobilidade.
+Diversos atributos presentes em `Rede_Viaria_RSU_2021` não serão úteis para esse artigo. Portanto, da tabela de atributos dos dados originais, apenas o **sentido da via** permaneceu e todos os demais atributos foram excluidos através da ferramenta `Editar campos` do software `QGIS`. Quatro novos campos foram criados: **nome da rua** e **tipo_pm**, sendo que o primeiro será utilizado para incluir o nome das vias e o segundo a classificação de acordo com o plano de mobilidade.
 
 ### 3. SELEÇÃO DAS VIAS A SEREM UTILIZADAS:
 As vias mencionadas no Plano de Mobilidade de Viçosa foram selecionadas utilizando o `Open Street Map` e o `Google Maps` como pano de fundo. Durante esse processo os campos os campos **nome da rua** e **tipo_pm** foram preenchidos.
 
-### 4. GARATINDO A INTEGRIDADE TOPOLÓGICA DA REDE:
+### 4. GARANTINDO A INTEGRIDADE TOPOLÓGICA DA REDE:
 
 Para garantir a integridade topológica da rede foi utilizado o complemento `Verificador de topologia` do software `QGIS`. No botão `Configurações`, seleciona-se o arquivo da malha viária e marca-se a opção `não devem ter dangles`, adiciona-se a regra e confirma. Na janela aberta clica-se em `Validar tudo`. Surgirão pontos vermelhos em alguns locais da malha viária e será possível descobrir quais linhas estão desconectadas (esses pontos vermelhos devem existir apenas onde a via realmente está interrompida, como as extremidades).
 
